@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/axios";
 import { useAuth } from "../context/AuthContext";
@@ -18,35 +18,36 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchDashboardData = async () => {
-    try {
-      setError("");
+  const fetchDashboardData = useCallback(async () => {
+  try {
+    const tasksRes = await API.get("/tasks");
+    const rewardsRes = await API.get("/rewards");
 
-      const [statsRes, rewardsRes] = await Promise.all([
-        API.get("/users/stats"),
-        API.get("/rewards")
-      ]);
+    const tasks = tasksRes.data;
+    const rewards = rewardsRes.data;
 
-      setStats(statsRes.data.stats);
-      setRewards(rewardsRes.data);
+    const completedTasks = tasks.filter(task => task.completed).length;
+    const pendingTasks = tasks.filter(task => !task.completed).length;
 
-      const updatedUser = {
-        ...(user || {}),
-        ...statsRes.data.user
-      };
+    const nextReward = rewards
+      .filter(reward => !reward.redeemed)
+      .sort((a, b) => a.requiredPoints - b.requiredPoints)[0];
 
-      setUser(updatedUser);
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  };
+    setStats({
+      totalTasks: tasks.length,
+      completedTasks,
+      pendingTasks,
+      rewardsCount: rewards.length,
+      nextReward
+    });
+  } catch (error) {
+    console.error("Dashboard fetch error:", error);
+  }
+}, []);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   const nextReward = useMemo(() => {
     const unredeemedRewards = rewards
